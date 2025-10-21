@@ -57,16 +57,29 @@ def create_release(version):
     # Add changes
     subprocess.run(["git", "add", "pyproject.toml", "setup.py"], check=True)
 
-    # Commit
-    subprocess.run(
-        ["git", "commit", "-m", f"chore: bump version to {clean_version}"], check=True
-    )
+    # Check if there are changes to commit
+    result = subprocess.run(["git", "diff", "--cached", "--quiet"], capture_output=True)
+    if result.returncode == 0:
+        print("ℹ️  No changes to commit (version already up to date)")
+    else:
+        # Commit changes
+        subprocess.run(
+            ["git", "commit", "-m", f"chore: bump version to {clean_version}"],
+            check=True,
+        )
+        print(f"✅ Committed version bump to {clean_version}")
 
     # Create tag
     subprocess.run(["git", "tag", version], check=True)
 
+    # Get current branch
+    result = subprocess.run(
+        ["git", "branch", "--show-current"], capture_output=True, text=True
+    )
+    current_branch = result.stdout.strip()
+
     # Push
-    subprocess.run(["git", "push", "origin", "main"], check=True)
+    subprocess.run(["git", "push", "origin", current_branch], check=True)
     subprocess.run(["git", "push", "origin", version], check=True)
 
     print(f"✅ Release {version} created and pushed!")
