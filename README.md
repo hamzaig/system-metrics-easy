@@ -1,5 +1,10 @@
 # System Metrics Easy
 
+[![PyPI version](https://badge.fury.io/py/system-metrics-easy.svg)](https://badge.fury.io/py/system-metrics-easy)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub Actions](<https://github.com/hamzaig/system-metrics-easy/workflows/Build%20&%20Publish%20to%20(Test)PyPI/badge.svg>)](https://github.com/hamzaig/system-metrics-easy/actions)
+
 A comprehensive server monitoring tool that collects and sends system metrics to a Socket.IO server. This tool provides real-time monitoring of CPU, memory, disk, network, and GPU usage across different platforms.
 
 ## Features
@@ -15,7 +20,24 @@ A comprehensive server monitoring tool that collects and sends system metrics to
 
 ## Installation
 
-### From Source (Current - Not Published to PyPI Yet)
+### From PyPI (Recommended)
+
+```bash
+# Install the package
+pip install system-metrics-easy
+```
+
+### From TestPyPI (Latest Development)
+
+```bash
+# Install from TestPyPI (latest development version)
+pip install -i https://test.pypi.org/simple/ system-metrics-easy
+
+# If you have dependencies from regular PyPI
+pip install -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ system-metrics-easy
+```
+
+### From Source (Development)
 
 ```bash
 # Clone the repository
@@ -24,52 +46,34 @@ cd system-metrics-easy
 
 # Install the package
 pip install -e .
-
-# With Supervisor support
-pip install -e .[supervisor]
 ```
 
 **Note**: Make sure you're in the `package` directory when running `pip install -e .` if you're working with the source code directly.
-
-### From PyPI (Coming Soon!)
-
-```bash
-# These commands will work once the package is published to PyPI
-# Basic installation
-pip install system-metrics-easy
-
-# With Supervisor support (for advanced background running)
-pip install system-metrics-easy[supervisor]
-
-# With all optional dependencies
-pip install system-metrics-easy[all]
-```
-
-**Note**: The package is not yet published to PyPI, so you need to install from source for now.
 
 ## Current Status
 
 ✅ **What Works Now:**
 
+- Install from PyPI: `pip install system-metrics-easy`
+- Install from TestPyPI: Latest development versions
 - Install from source: `git clone` + `pip install -e .`
 - Run the tool: `system-metrics-easy`
 - All monitoring features work perfectly
 - Background process management works
+- **Automated deployment**: Push to main → TestPyPI, Tag releases → PyPI
 
-❌ **What Doesn't Work Yet:**
+🚀 **Automated Deployment:**
 
-- `pip install system-metrics-easy` (not published to PyPI)
-- PyPI installation methods
+- **Push to `main` branch** → Automatically publishes to TestPyPI
+- **Create version tag** (e.g., `v1.0.0`) → Automatically publishes to PyPI
 
 ## Quick Start (Super Simple!)
 
 ### Install and Run
 
 ```bash
-# First, install from source (since it's not on PyPI yet)
-git clone https://github.com/hamzaig/system-metrics-easy.git
-cd system-metrics-easy
-pip install -e .
+# Install from PyPI (recommended)
+pip install system-metrics-easy
 
 # Run it - it will ask you for configuration and start in background!
 system-metrics-easy
@@ -271,24 +275,52 @@ python -m pytest tests/
 python -m build
 ```
 
-### Publishing to PyPI (When Ready)
+### Automated Deployment
+
+This package uses **GitHub Actions** for automated deployment:
+
+#### **Development Releases (TestPyPI)**
+
+- **Trigger**: Push to `main` branch
+- **Result**: Automatically publishes to TestPyPI
+- **Install**: `pip install -i https://test.pypi.org/simple/ system-metrics-easy`
+
+#### **Production Releases (PyPI)**
+
+- **Trigger**: Create and push a version tag (e.g., `v1.0.0`)
+- **Result**: Automatically publishes to PyPI
+- **Install**: `pip install system-metrics-easy`
+
+#### **Creating a New Release**
+
+**Option 1: Using the release script (Recommended)**
 
 ```bash
-# Install build tools
-pip install build twine
+# Make the script executable (first time only)
+chmod +x scripts/release.py
 
-# Build the package
-python -m build
-
-# Upload to PyPI (requires PyPI account)
-python -m twine upload dist/*
+# Create a new release (automatically updates versions and creates tag)
+python scripts/release.py 1.0.0
 ```
 
-After publishing, users will be able to install with:
+**Option 2: Manual process**
 
 ```bash
-pip install system-metrics-easy
+# Update version in pyproject.toml and setup.py
+# Commit changes
+git add .
+git commit -m "chore: bump version to 1.0.0"
+
+# Create and push tag
+git tag v1.0.0
+git push origin main --tags
 ```
+
+The GitHub Actions workflow will automatically:
+
+1. Build the package
+2. Run quality checks
+3. Publish to the appropriate PyPI instance
 
 ## Contributing
 

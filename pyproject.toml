@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "system-metrics-easy"
-version = "--help"
+version = "1.0.0"
 authors = [
     {name = "Your Name", email = "your.email@example.com"},
 ]
@@ -45,9 +45,6 @@ dependencies = [
     "wsproto==1.2.0",
 ]
 
-[project.optional-dependencies]
-supervisor = ["supervisor>=4.2.0"]
-all = ["supervisor>=4.2.0"]
 
 [project.urls]
 Homepage = "https://github.com/hamzaig/system-metrics-easy"

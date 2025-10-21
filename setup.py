@@ -37,7 +37,7 @@ def get_requirements():
 
 setup(
     name="system-metrics-easy",
-    version="--help",
+    version="1.0.0",
     author="Your Name",
     author_email="your.email@example.com",
     description="A comprehensive server monitoring tool that collects and sends system metrics to a Socket.IO server",
@@ -67,13 +67,6 @@ setup(
         "console_scripts": [
             "system-metrics-easy=system_metrics_easy.server_metrics:main",  # Use the main script directly
         ],
-    },
-    data_files=[
-        ("supervisor", ["supervisor.conf"]),
-    ],
-    extras_require={
-        "supervisor": ["supervisor>=4.2.0"],
-        "all": ["supervisor>=4.2.0"],
     },
     keywords="server monitoring metrics system stats cpu memory disk network gpu socketio",
     project_urls={
