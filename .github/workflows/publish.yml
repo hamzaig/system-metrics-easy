@@ -9,10 +9,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Specifying a GitHub environment is optional, but strongly encouraged
-    environment: pypi
     permissions:
-      # IMPORTANT: this permission is mandatory for Trusted Publishing
       id-token: write
 
     steps:
@@ -31,9 +28,13 @@ jobs:
 
       - name: Test package installation
         run: |
+          echo "Installing package in development mode..."
           pip install -e .
+          echo "Testing system-metrics-easy command..."
           system-metrics-easy --help
+          echo "Testing status command..."
           system-metrics-easy --status
+          echo "✅ All tests passed!"
 
       - name: Build sdist & wheel
         run: python -m build
