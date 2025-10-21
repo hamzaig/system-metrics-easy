@@ -9,42 +9,67 @@ A comprehensive server monitoring tool that collects and sends system metrics to
 - **GPU Support**: NVIDIA, Apple Silicon, AMD, and Intel GPUs
 - **Socket.IO Integration**: Real-time data transmission to your monitoring server
 - **Robust Error Handling**: Graceful handling of system errors and missing dependencies
-- **Easy Configuration**: Simple environment variable configuration
-- **Command Line Interface**: Flexible command-line options
+- **Easy Configuration**: Interactive configuration setup
+- **Command Line Interface**: Simple command-line options
+- **Background Process Management**: Built-in background running with PID management
 
 ## Installation
 
-### From PyPI (Recommended)
+### From Source (Current - Not Published to PyPI Yet)
 
 ```bash
-# Basic installation
-pip install system-metrics-easy
-
-# With Supervisor support (for background running)
-pip install system-metrics-easy[supervisor]
-
-# With all optional dependencies
-pip install system-metrics-easy[all]
-```
-
-### From Source
-
-```bash
-git clone https://github.com/yourusername/system-metrics-easy.git
+# Clone the repository
+git clone https://github.com/hamzaig/system-metrics-easy.git
 cd system-metrics-easy
+
+# Install the package
 pip install -e .
 
 # With Supervisor support
 pip install -e .[supervisor]
 ```
 
+**Note**: Make sure you're in the `package` directory when running `pip install -e .` if you're working with the source code directly.
+
+### From PyPI (Coming Soon!)
+
+```bash
+# These commands will work once the package is published to PyPI
+# Basic installation
+pip install system-metrics-easy
+
+# With Supervisor support (for advanced background running)
+pip install system-metrics-easy[supervisor]
+
+# With all optional dependencies
+pip install system-metrics-easy[all]
+```
+
+**Note**: The package is not yet published to PyPI, so you need to install from source for now.
+
+## Current Status
+
+✅ **What Works Now:**
+
+- Install from source: `git clone` + `pip install -e .`
+- Run the tool: `system-metrics-easy`
+- All monitoring features work perfectly
+- Background process management works
+
+❌ **What Doesn't Work Yet:**
+
+- `pip install system-metrics-easy` (not published to PyPI)
+- PyPI installation methods
+
 ## Quick Start (Super Simple!)
 
 ### Install and Run
 
 ```bash
-# Install the package
-pip install system-metrics-easy
+# First, install from source (since it's not on PyPI yet)
+git clone https://github.com/hamzaig/system-metrics-easy.git
+cd system-metrics-easy
+pip install -e .
 
 # Run it - it will ask you for configuration and start in background!
 system-metrics-easy
@@ -140,7 +165,7 @@ The tool connects to your Socket.IO server and emits metrics data in the followi
 
 ### Optional Dependencies
 
-- **supervisor** (for background process management)
+- **supervisor** (for advanced background process management)
   - Install with: `pip install system-metrics-easy[supervisor]`
 
 ## Platform Support
@@ -171,13 +196,13 @@ The tool includes robust error handling:
 
 ```bash
 # Start in background (one command!)
-server-metrics-background
+system-metrics-easy
 
 # Check if running
-server-metrics-background --status
+system-metrics-easy --status
 
 # Stop it
-server-metrics-background --stop
+system-metrics-easy --stop
 
 # View logs
 tail -f system-metrics-easy.log
@@ -202,12 +227,32 @@ system-metrics-easy
 # Press Ctrl+B, D to detach
 ```
 
+## Configuration
+
+### Environment Variables
+
+You can set these environment variables for automatic configuration:
+
+```bash
+export TIME_INTERVAL=10
+export SOCKET_SERVER_URL=http://localhost:8000
+export SERVER_ID=my-server-001
+```
+
+### Interactive Configuration
+
+If no environment variables are set, the tool will ask you for:
+
+1. **Time Interval**: How often to collect metrics (seconds)
+2. **Server URL**: Your Socket.IO server URL
+3. **Server ID**: Unique identifier for this server
+
 ## Development
 
 ### Setup Development Environment
 
 ```bash
-git clone https://github.com/yourusername/system-metrics-easy.git
+git clone https://github.com/hamzaig/system-metrics-easy.git
 cd system-metrics-easy
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
@@ -226,6 +271,25 @@ python -m pytest tests/
 python -m build
 ```
 
+### Publishing to PyPI (When Ready)
+
+```bash
+# Install build tools
+pip install build twine
+
+# Build the package
+python -m build
+
+# Upload to PyPI (requires PyPI account)
+python -m twine upload dist/*
+```
+
+After publishing, users will be able to install with:
+
+```bash
+pip install system-metrics-easy
+```
+
 ## Contributing
 
 1. Fork the repository
@@ -240,9 +304,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/system-metrics-easy/issues)
-- **Documentation**: [GitHub Wiki](https://github.com/yourusername/system-metrics-easy/wiki)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/system-metrics-easy/discussions)
+- **Issues**: [GitHub Issues](https://github.com/hamzaig/system-metrics-easy/issues)
+- **Documentation**: [GitHub Wiki](https://github.com/hamzaig/system-metrics-easy/wiki)
+- **Discussions**: [GitHub Discussions](https://github.com/hamzaig/system-metrics-easy/discussions)
 
 ## Changelog
 
@@ -253,4 +317,23 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Socket.IO integration
 - Multi-platform support
 - Command-line interface
-- Environment variable configuration
+- Interactive configuration
+- Built-in background process management
+
+## About
+
+System Metrics Easy is a simple yet powerful tool for monitoring server performance. It's designed to be easy to use while providing comprehensive system metrics collection and real-time data transmission to your monitoring infrastructure.
+
+### Resources
+
+- **Repository**: [https://github.com/hamzaig/system-metrics-easy](https://github.com/hamzaig/system-metrics-easy)
+- **Documentation**: [GitHub Wiki](https://github.com/hamzaig/system-metrics-easy/wiki)
+- **Issues**: [GitHub Issues](https://github.com/hamzaig/system-metrics-easy/issues)
+
+### License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+---
+
+**Made with ❤️ by [Moonsys](https://github.com/hamzaig)**

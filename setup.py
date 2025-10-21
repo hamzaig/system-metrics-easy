@@ -43,7 +43,7 @@ setup(
     description="A comprehensive server monitoring tool that collects and sends system metrics to a Socket.IO server",
     long_description=read_readme(),
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/server-metrics-monitor",
+    url="https://github.com/hamzaig/system-metrics-easy",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 5 - Production/Stable",
@@ -77,9 +77,9 @@ setup(
     },
     keywords="server monitoring metrics system stats cpu memory disk network gpu socketio",
     project_urls={
-        "Bug Reports": "https://github.com/yourusername/server-metrics-monitor/issues",
-        "Source": "https://github.com/yourusername/server-metrics-monitor",
-        "Documentation": "https://github.com/yourusername/server-metrics-monitor#readme",
+        "Bug Reports": "https://github.com/hamzaig/system-metrics-easy/issues",
+        "Source": "https://github.com/hamzaig/system-metrics-easy",
+        "Documentation": "https://github.com/hamzaig/system-metrics-easy#readme",
     },
     include_package_data=True,
     zip_safe=False,

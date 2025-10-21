@@ -50,10 +50,10 @@ supervisor = ["supervisor>=4.2.0"]
 all = ["supervisor>=4.2.0"]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/server-metrics-monitor"
-Repository = "https://github.com/yourusername/server-metrics-monitor"
-Issues = "https://github.com/yourusername/server-metrics-monitor/issues"
-Documentation = "https://github.com/yourusername/server-metrics-monitor#readme"
+Homepage = "https://github.com/hamzaig/system-metrics-easy"
+Repository = "https://github.com/hamzaig/system-metrics-easy"
+Issues = "https://github.com/hamzaig/system-metrics-easy/issues"
+Documentation = "https://github.com/hamzaig/system-metrics-easy#readme"
 
 [project.scripts]
 system-metrics-easy = "system_metrics_easy.server_metrics:main"
