@@ -1187,20 +1187,20 @@ def emit_metrics_to_server():
         # Connection event handler
         @sio.event
         def connect():
-            print(f"✅ Connected to Socket.IO server: {SOCKET_SERVER_URL}")
-            print(f"📡 Server ID: {SERVER_ID}")
-            print(f"⏱️  Emitting metrics every {TIME_INTERVAL} seconds...")
+            print(f"[OK] Connected to Socket.IO server: {SOCKET_SERVER_URL}")
+            print(f"[INFO] Server ID: {SERVER_ID}")
+            print(f"[INFO] Emitting metrics every {TIME_INTERVAL} seconds...")
             print("Press Ctrl+C to stop...")
 
         # Disconnection event handler
         @sio.event
         def disconnect():
-            print("❌ Disconnected from Socket.IO server")
+            print("[ERROR] Disconnected from Socket.IO server")
 
         # Error event handler
         @sio.event
         def connect_error(data):
-            print(f"❌ Connection error: {data}")
+            print(f"[ERROR] Connection error: {data}")
 
         # Connect to server with retry logic
         def connect_with_retry(url, max_retries=5):
@@ -1212,18 +1212,18 @@ def emit_metrics_to_server():
                     return True
                 except Exception as e:
                     retries += 1
-                    print(f"🔄 Connection attempt {retries} failed: {e}")
+                    print(f"[RETRY] Connection attempt {retries} failed: {e}")
                     if retries < max_retries:
                         time.sleep(2)
                     else:
-                        print(f"❌ Failed to connect after {max_retries} attempts")
+                        print(f"[ERROR] Failed to connect after {max_retries} attempts")
                         return False
             return False
 
         # Initial connection
         full_url = f"{SOCKET_SERVER_URL}?serverId={SERVER_ID}"
         if not connect_with_retry(full_url, max_retries=5):
-            print("❌ Could not establish initial connection")
+            print("[ERROR] Could not establish initial connection")
             return False
 
         # Create metrics collector
@@ -1246,16 +1246,16 @@ def emit_metrics_to_server():
 
                         # Emit to server
                         sio.emit("server-stats", metrics)
-                        print(f"📊 Metrics emitted at {metrics['formatted_time']}")
+                        print(f"[INFO] Metrics emitted at {metrics['formatted_time']}")
                         consecutive_failures = 0  # Reset failure counter on success
                     else:
-                        print("⚠️  Not connected, waiting for reconnection...")
+                        print("[WARNING] Not connected, waiting for reconnection...")
                         consecutive_failures += 1
 
                         # Check if we've had too many consecutive failures
                         if consecutive_failures >= max_consecutive_failures:
                             print(
-                                f"❌ Too many consecutive connection failures ({consecutive_failures}), exiting..."
+                                f"[ERROR] Too many consecutive connection failures ({consecutive_failures}), exiting..."
                             )
                             break
 
@@ -1268,7 +1268,7 @@ def emit_metrics_to_server():
                         time.sleep(0.1)
 
                 except Exception as e:
-                    print(f"❌ Error in metrics loop: {e}")
+                    print(f"[ERROR] Error in metrics loop: {e}")
                     consecutive_failures += 1
                     time.sleep(1)
 
@@ -1276,29 +1276,29 @@ def emit_metrics_to_server():
             # Start sending metrics
             send_metrics()
         except KeyboardInterrupt:
-            print("\n🛑 Stopping metrics emission...")
+            print("\n[STOP] Stopping metrics emission...")
             stop_event.set()
         finally:
             # Clean disconnect
             if sio.connected:
                 sio.disconnect()
-            print("✅ Cleaned up connection")
+            print("[OK] Cleaned up connection")
 
         return True
 
     except ImportError:
         print(
-            "❌ Error: python-socketio module not found. Install with: pip install python-socketio"
+            "[ERROR] python-socketio module not found. Install with: pip install python-socketio"
         )
         return False
     except Exception as e:
-        print(f"❌ Error in main loop: {str(e)}")
+        print(f"[ERROR] Error in main loop: {str(e)}")
         return False
 
 
 def get_user_config():
     """Ask user for configuration"""
-    print("🚀 System Metrics Easy - Simple Setup")
+    print("System Metrics Easy - Simple Setup")
     print("=" * 50)
 
     # Get time interval
@@ -1330,7 +1330,7 @@ def get_user_config():
 
 def run_in_background(interval, server_url, server_id):
     """Run the server metrics monitor in background"""
-    print("\n🚀 Starting System Metrics Easy in background...")
+    print("\nStarting System Metrics Easy in background...")
     print(f"   Interval: {interval} seconds")
     print(f"   Server: {server_url}")
     print(f"   Server ID: {server_id}")
@@ -1340,7 +1340,7 @@ def run_in_background(interval, server_url, server_id):
     main_script = script_dir / "system_metrics_easy" / "server_metrics.py"
 
     if not main_script.exists():
-        print("❌ Error: Main script not found!")
+        print("[ERROR] Main script not found!")
         return False
 
     # Create log file
@@ -1374,19 +1374,19 @@ def run_in_background(interval, server_url, server_id):
             with open(pid_file, "w") as f:
                 f.write(str(process.pid))
 
-            print("✅ System Metrics Easy started!")
-            print(f"📝 PID: {process.pid}")
-            print(f"📄 Logs: {log_file}")
-            print("🛑 To stop: system-metrics-easy --stop")
-            print("📊 To check: system-metrics-easy --status")
+            print("[OK] System Metrics Easy started!")
+            print(f"[INFO] PID: {process.pid}")
+            print(f"[INFO] Logs: {log_file}")
+            print("[INFO] To stop: system-metrics-easy --stop")
+            print("[INFO] To check: system-metrics-easy --status")
 
             return True
         else:
-            print(f"❌ Process failed to start. Check logs: {log_file}")
+            print(f"[ERROR] Process failed to start. Check logs: {log_file}")
             return False
 
     except Exception as e:
-        print(f"❌ Error starting: {e}")
+        print(f"[ERROR] Error starting: {e}")
         return False
 
 
@@ -1396,7 +1396,7 @@ def stop_background():
     pid_file = script_dir / "system-metrics-easy.pid"
 
     if not pid_file.exists():
-        print("⚠️  No PID file found. Process may not be running.")
+        print("[WARNING] No PID file found. Process may not be running.")
         return False
 
     try:
@@ -1410,7 +1410,7 @@ def stop_background():
         # Check if still running
         try:
             os.kill(pid, 0)  # This will raise an exception if process doesn't exist
-            print("⚠️  Process still running, force killing...")
+            print("[WARNING] Process still running, force killing...")
             os.kill(pid, signal.SIGKILL)
         except OSError:
             pass  # Process already stopped
@@ -1418,11 +1418,11 @@ def stop_background():
         # Remove PID file
         pid_file.unlink()
 
-        print("✅ System Metrics Easy stopped!")
+        print("[OK] System Metrics Easy stopped!")
         return True
 
     except Exception as e:
-        print(f"❌ Error stopping: {e}")
+        print(f"[ERROR] Error stopping: {e}")
         return False
 
 
@@ -1433,7 +1433,7 @@ def check_status():
     log_file = script_dir / "system-metrics-easy.log"
 
     if not pid_file.exists():
-        print("❌ System Metrics Easy is not running")
+        print("[ERROR] System Metrics Easy is not running")
         return False
 
     try:
@@ -1443,11 +1443,11 @@ def check_status():
         # Check if process is still running
         try:
             os.kill(pid, 0)  # This will raise an exception if process doesn't exist
-            print(f"✅ System Metrics Easy is running (PID: {pid})")
+            print(f"[OK] System Metrics Easy is running (PID: {pid})")
 
             if log_file.exists():
-                print(f"📄 Log file: {log_file}")
-                print("📝 Recent logs:")
+                print(f"[INFO] Log file: {log_file}")
+                print("[INFO] Recent logs:")
                 print("-" * 40)
                 try:
                     with open(log_file, "r") as f:
@@ -1459,12 +1459,12 @@ def check_status():
 
             return True
         except OSError:
-            print("❌ Process is not running (stale PID file)")
+            print("[ERROR] Process is not running (stale PID file)")
             pid_file.unlink()  # Remove stale PID file
             return False
 
     except Exception as e:
-        print(f"❌ Error checking status: {e}")
+        print(f"[ERROR] Error checking status: {e}")
         return False
 
 
@@ -1502,7 +1502,7 @@ def main():
         SOCKET_SERVER_URL = os.getenv("SOCKET_SERVER_URL", "http://localhost:8000")
         SERVER_ID = os.getenv("SERVER_ID", f"server-{platform.node()}")
 
-        print("🚀 Starting System Metrics Easy")
+        print("Starting System Metrics Easy")
         print(f"   Interval: {TIME_INTERVAL} seconds")
         print(f"   Server: {SOCKET_SERVER_URL}")
         print(f"   Server ID: {SERVER_ID}")
@@ -1511,24 +1511,24 @@ def main():
         return emit_metrics_to_server()
     else:
         # Interactive configuration and start
-        print("🚀 System Metrics Easy - Simple Setup")
+        print("System Metrics Easy - Simple Setup")
         print("=" * 50)
 
         # Get configuration
         interval, server_url, server_id = get_user_config()
 
-        print("\n✅ Configuration:")
+        print("\n[OK] Configuration:")
         print(f"   Interval: {interval} seconds")
         print(f"   Server: {server_url}")
         print(f"   Server ID: {server_id}")
 
         # Ask if user wants to start now
-        start_now = input("\n🚀 Start monitoring now? (y/n): ").strip().lower()
+        start_now = input("\nStart monitoring now? (y/n): ").strip().lower()
         if start_now in ["y", "yes", ""]:
             # Run in background
             return run_in_background(interval, server_url, server_id)
         else:
-            print("💡 To start later, run: system-metrics-easy")
+            print("[INFO] To start later, run: system-metrics-easy")
             return True
 
 
