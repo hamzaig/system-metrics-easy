@@ -363,6 +363,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
+### Version 1.1.2
+
+- **ADDED**: websocket-client dependency for better WebSocket transport support
+- **IMPROVED**: More efficient real-time communication with WebSocket instead of polling
+- **IMPROVED**: Reduced connection overhead and better performance
+
 ### Version 1.1.1
 
 - **FIXED**: Unicode encoding error on Windows systems (replaced emoji characters with text indicators)

@@ -31,13 +31,14 @@ def get_requirements():
         "requests==2.32.5",
         "simple-websocket==1.1.0",
         "urllib3==2.5.0",
+        "websocket-client>=1.0.0",  # For WebSocket transport support
         "wsproto==1.2.0",
     ]
 
 
 setup(
     name="system-metrics-easy",
-    version="1.1.1",
+    version="1.1.2",
     author="moonsys",
     author_email="admin@moonsys.co",
     description="A comprehensive server monitoring tool that collects and sends system metrics to a Socket.IO server",
