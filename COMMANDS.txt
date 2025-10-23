@@ -1,0 +1,36 @@
+🚀 DEPLOYMENT COMMANDS
+======================
+
+TESTPYPI (Development Testing):
+===============================
+1. Make your changes
+2. Run these commands:
+   ```bash
+   git add .
+   git commit -m "your changes"
+   git push origin main
+   ```
+3. GitHub Actions automatically publishes to TestPyPI
+4. Install test version:
+   ```bash
+   pip install -i https://test.pypi.org/simple/ system-metrics-easy
+   ```
+
+PYPI (Production Release):
+==========================
+1. Run this command:
+   ```bash
+   python scripts/release.py 1.0.1
+   ```
+   (Replace 1.0.1 with your desired version)
+
+2. GitHub Actions automatically publishes to PyPI
+3. Install production version:
+   ```bash
+   pip install system-metrics-easy
+   ```
+
+QUICK SUMMARY:
+==============
+- TestPyPI: git push origin main
+- PyPI: python scripts/release.py 1.0.1
