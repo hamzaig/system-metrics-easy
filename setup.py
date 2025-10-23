@@ -37,7 +37,7 @@ def get_requirements():
 
 setup(
     name="system-metrics-easy",
-    version="1.0.0",
+    version="1.1.0",
     author="Your Name",
     author_email="your.email@example.com",
     description="A comprehensive server monitoring tool that collects and sends system metrics to a Socket.IO server",

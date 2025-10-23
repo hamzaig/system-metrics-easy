@@ -17,6 +17,9 @@ A comprehensive server monitoring tool that collects and sends system metrics to
 - **Easy Configuration**: Interactive configuration setup
 - **Command Line Interface**: Simple command-line options
 - **Background Process Management**: Built-in background running with PID management
+- **Smart Reconnection**: Limited reconnection attempts with automatic exit on failure
+- **Consecutive Failure Tracking**: Exits after 10 consecutive connection failures
+- **Direct Execution Mode**: Simple `python index.py` execution without input prompts
 
 ## Installation
 
@@ -100,6 +103,24 @@ system-metrics-easy --stop
 ```
 
 **That's it! Just simple commands: `system-metrics-easy`, `--status`, `--stop`**
+
+### Direct Execution Mode (v1.1.0+)
+
+For even simpler usage, you can run the script directly without any input prompts:
+
+```bash
+# Direct execution with default settings
+python index.py
+
+# Or with environment variables
+TIME_INTERVAL=5 SOCKET_SERVER_URL=http://your-server:3000 python index.py
+```
+
+**Default Settings:**
+
+- **Interval**: 10 seconds (or set via `TIME_INTERVAL` env var)
+- **Server URL**: `http://localhost:8000` (or set via `SOCKET_SERVER_URL` env var)
+- **Server ID**: `server-{hostname}` (or set via `SERVER_ID` env var)
 
 ## Metrics Collected
 
@@ -341,6 +362,16 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Discussions**: [GitHub Discussions](https://github.com/hamzaig/system-metrics-easy/discussions)
 
 ## Changelog
+
+### Version 1.1.0
+
+- **NEW**: Direct execution mode - run `python index.py` without input prompts
+- **NEW**: Smart reconnection with limited attempts (10 max reconnection attempts)
+- **NEW**: Consecutive failure tracking - exits after 10 consecutive failures
+- **NEW**: Environment variable support for direct execution
+- **IMPROVED**: Better error handling and graceful exit on connection failures
+- **IMPROVED**: Enhanced reliability with automatic failure detection
+- **FIXED**: Script no longer runs indefinitely on connection failures
 
 ### Version 1.0.0
 

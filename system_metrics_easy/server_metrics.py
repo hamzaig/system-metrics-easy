@@ -1168,10 +1168,21 @@ class ServerMetrics:
 
 
 def emit_metrics_to_server():
-    """Emit metrics to Socket.IO server at regular intervals"""
+    """Emit metrics to Socket.IO server at regular intervals with built-in reconnection"""
     try:
-        # Create Socket.IO client
-        sio = socketio.Client()
+        from threading import Event
+
+        # Create stop event for graceful shutdown
+        stop_event = Event()
+
+        # Create Socket.IO client with built-in reconnection
+        sio = socketio.Client(
+            reconnection=True,
+            reconnection_attempts=10,  # 10 attempts after first successful connection
+            reconnection_delay=1,
+            reconnection_delay_max=30,  # Max 30 seconds between retries
+            logger=True,  # Enable logging for debugging
+        )
 
         # Connection event handler
         @sio.event
@@ -1191,62 +1202,42 @@ def emit_metrics_to_server():
         def connect_error(data):
             print(f"❌ Connection error: {data}")
 
-        # Connect to server
+        # Connect to server with retry logic
+        def connect_with_retry(url, max_retries=5):
+            """Connect to server with retry logic"""
+            retries = 0
+            while max_retries is None or retries < max_retries:
+                try:
+                    sio.connect(url)
+                    return True
+                except Exception as e:
+                    retries += 1
+                    print(f"🔄 Connection attempt {retries} failed: {e}")
+                    if retries < max_retries:
+                        time.sleep(2)
+                    else:
+                        print(f"❌ Failed to connect after {max_retries} attempts")
+                        return False
+            return False
+
+        # Initial connection
         full_url = f"{SOCKET_SERVER_URL}?serverId={SERVER_ID}"
-        sio.connect(full_url)
+        if not connect_with_retry(full_url, max_retries=5):
+            print("❌ Could not establish initial connection")
+            return False
 
         # Create metrics collector
         metrics_collector = ServerMetrics()
 
-        # Emit metrics at regular intervals
-        while True:
-            try:
-                # Collect metrics
-                metrics = metrics_collector.get_all_metrics()
+        # Main metrics emission loop
+        def send_metrics():
+            """Send metrics at regular intervals"""
+            consecutive_failures = 0
+            max_consecutive_failures = 10  # Exit after 10 consecutive failures
 
-                # Add server ID to metrics
-                metrics["server_id"] = SERVER_ID
-
-                # Emit to server
-                sio.emit("server-stats", metrics)
-
-                # Wait for next interval
-                time.sleep(TIME_INTERVAL)
-
-            except KeyboardInterrupt:
-                print("\n🛑 Stopping metrics emission...")
-                break
-            except Exception as e:
-                print(f"❌ Error emitting metrics: {str(e)}")
-                time.sleep(1)  # Wait before retrying
-
-        # Disconnect from server
-        sio.disconnect()
-        return True
-
-    except ImportError:
-        print(
-            "❌ Error: python-socketio module not found. Install with: pip install python-socketio"
-        )
-        return False
-    except Exception as e:
-        print(f"❌ Error connecting to server: {str(e)}")
-        print("🔄 Will keep retrying to connect...")
-
-        # Keep retrying to connect
-        while True:
-            try:
-                print(f"🔄 Retrying connection to {SOCKET_SERVER_URL}...")
-                time.sleep(5)  # Wait 5 seconds before retry
-
-                # Try to connect again
-                sio = socketio.Client()
-                sio.connect(SOCKET_SERVER_URL)
-                print("✅ Connected to server!")
-
-                # Emit metrics at regular intervals
-                while True:
-                    try:
+            while not stop_event.is_set():
+                try:
+                    if sio.connected:
                         # Collect metrics
                         metrics = metrics_collector.get_all_metrics()
 
@@ -1255,24 +1246,54 @@ def emit_metrics_to_server():
 
                         # Emit to server
                         sio.emit("server-stats", metrics)
+                        print(f"📊 Metrics emitted at {metrics['formatted_time']}")
+                        consecutive_failures = 0  # Reset failure counter on success
+                    else:
+                        print("⚠️  Not connected, waiting for reconnection...")
+                        consecutive_failures += 1
 
-                        # Wait for next interval
-                        time.sleep(TIME_INTERVAL)
+                        # Check if we've had too many consecutive failures
+                        if consecutive_failures >= max_consecutive_failures:
+                            print(
+                                f"❌ Too many consecutive connection failures ({consecutive_failures}), exiting..."
+                            )
+                            break
 
-                    except KeyboardInterrupt:
-                        print("\n🛑 Stopping metrics emission...")
-                        break
-                    except Exception as e:
-                        print(f"❌ Error emitting metrics: {str(e)}")
-                        time.sleep(1)  # Wait before retrying
+                    # Wait for next interval or stop event
+                    for _ in range(
+                        TIME_INTERVAL * 10
+                    ):  # Check stop_event every 0.1 seconds
+                        if stop_event.is_set():
+                            break
+                        time.sleep(0.1)
 
-                # Disconnect from server
+                except Exception as e:
+                    print(f"❌ Error in metrics loop: {e}")
+                    consecutive_failures += 1
+                    time.sleep(1)
+
+        try:
+            # Start sending metrics
+            send_metrics()
+        except KeyboardInterrupt:
+            print("\n🛑 Stopping metrics emission...")
+            stop_event.set()
+        finally:
+            # Clean disconnect
+            if sio.connected:
                 sio.disconnect()
-                return True
+            print("✅ Cleaned up connection")
 
-            except Exception as retry_e:
-                print(f"❌ Retry failed: {str(retry_e)}")
-                time.sleep(5)  # Wait before next retry
+        return True
+
+    except ImportError:
+        print(
+            "❌ Error: python-socketio module not found. Install with: pip install python-socketio"
+        )
+        return False
+    except Exception as e:
+        print(f"❌ Error in main loop: {str(e)}")
+        return False
 
 
 def get_user_config():
