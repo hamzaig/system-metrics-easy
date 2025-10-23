@@ -363,6 +363,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
+### Version 1.1.1
+
+- **FIXED**: Unicode encoding error on Windows systems (replaced emoji characters with text indicators)
+- **IMPROVED**: Better cross-platform compatibility for Windows console
+- **IMPROVED**: Cleaner, more professional output without emoji dependencies
+
 ### Version 1.1.0
 
 - **NEW**: Direct execution mode - run `python index.py` without input prompts
