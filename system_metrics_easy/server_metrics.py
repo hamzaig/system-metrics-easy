@@ -27,8 +27,11 @@ from pathlib import Path
 
 load_dotenv()
 
+# Version information
+__version__ = "1.2.0"
+
 TIME_INTERVAL = int(os.getenv("TIME_INTERVAL") or "10")
-SOCKET_SERVER_URL = os.getenv("SOCKET_SERVER_URL") or "http://localhost:8000"
+SOCKET_SERVER_URL = "https://api.server-metrics.letz.chat"  # Hardcoded backend URL
 SERVER_ID = os.getenv("SERVER_ID") or f"server-{platform.node()}"
 
 
@@ -36,6 +39,7 @@ class ServerMetrics:
     def __init__(self):
         self.previous_net_stats = None
         self.previous_time = None
+        self.previous_cpu_times = None
         self.max_retries = 3
         self.timeout_seconds = 10
         self._setup_signal_handlers()
@@ -115,12 +119,30 @@ class ServerMetrics:
 
             for attempt in range(self.max_retries):
                 try:
-                    per_cpu = psutil.cpu_percent(interval=0.1, percpu=True)
-                    total_cpu = psutil.cpu_percent(interval=0.1)
+                    # Method 1: Try the standard psutil approach with proper initialization
+                    if self.previous_cpu_times is None:
+                        # First run - initialize
+                        psutil.cpu_percent(interval=None, percpu=True)
+                        time.sleep(0.1)
+                        per_cpu = psutil.cpu_percent(interval=None, percpu=True)
+                        self.previous_cpu_times = time.time()
+                    else:
+                        # Subsequent runs - use interval for better accuracy
+                        per_cpu = psutil.cpu_percent(interval=0.1, percpu=True)
+
+                    # Calculate total CPU from per-core data
+                    if per_cpu and len(per_cpu) > 0:
+                        total_cpu = sum(per_cpu) / len(per_cpu)
+                    else:
+                        # Fallback: get total CPU directly
+                        if self.previous_cpu_times is None:
+                            psutil.cpu_percent(interval=None)
+                            time.sleep(0.1)
+                        total_cpu = psutil.cpu_percent(interval=0.1)
 
                     # Validate the data
-                    if per_cpu is None or total_cpu is None:
-                        raise ValueError("CPU data is None")
+                    if per_cpu is None:
+                        raise ValueError("Per-core CPU data is None")
 
                     # Check for reasonable values
                     if not isinstance(per_cpu, (list, tuple)) or len(per_cpu) == 0:
@@ -133,13 +155,16 @@ class ServerMetrics:
                     ):
                         raise ValueError(f"Invalid total CPU value: {total_cpu}")
 
+                    # Update previous time for next call
+                    self.previous_cpu_times = time.time()
+
                     break
 
                 except Exception as e:
                     if attempt == self.max_retries - 1:
                         raise e
                     print(f"Warning: CPU metrics attempt {attempt + 1} failed: {e}")
-                    time.sleep(0.1)
+                    time.sleep(0.2)
 
             # Get load average safely
             load_avg = None
@@ -1133,6 +1158,7 @@ class ServerMetrics:
                 "os": f"{platform.system()} {platform.release()}",
                 "architecture": platform.machine(),
                 "python_version": platform.python_version(),
+                "monitor_version": __version__,
                 "uptime_seconds": round(time.time() - psutil.boot_time(), 2),
                 "boot_time": time.strftime(
                     "%Y-%m-%d %H:%M:%S", time.localtime(psutil.boot_time())
@@ -1144,6 +1170,7 @@ class ServerMetrics:
                 "os": f"{platform.system()} {platform.release()}",
                 "architecture": platform.machine(),
                 "python_version": platform.python_version(),
+                "monitor_version": __version__,
                 "uptime_seconds": "Unknown (psutil not available)",
                 "boot_time": "Unknown (psutil not available)",
             }
@@ -1308,14 +1335,9 @@ def get_user_config():
     if not interval:
         interval = "10"
 
-    # Get server URL
-    print("\n2. Where to send the data?")
-    print("   Default: http://localhost:8000")
-    server_url = input(
-        "   Enter server URL (or press Enter for localhost:8000): "
-    ).strip()
-    if not server_url:
-        server_url = "http://localhost:8000"
+    # Server URL is hardcoded
+    server_url = "https://api.server-metrics.letz.chat"
+    print(f"\n2. Backend server: {server_url} (hardcoded)")
 
     # Get server ID
     hostname = platform.node()
@@ -1499,7 +1521,7 @@ def main():
         # Run in foreground (called by background process)
         # Update global variables from environment
         TIME_INTERVAL = int(os.getenv("TIME_INTERVAL", "10"))
-        SOCKET_SERVER_URL = os.getenv("SOCKET_SERVER_URL", "http://localhost:8000")
+        # SOCKET_SERVER_URL is hardcoded, no need to read from environment
         SERVER_ID = os.getenv("SERVER_ID", f"server-{platform.node()}")
 
         print("Starting System Metrics Easy")
