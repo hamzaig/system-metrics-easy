@@ -38,8 +38,8 @@ def get_requirements():
 
 setup(
     name="system-metrics-easy",
-    version="1.1.2",
-    author="moonsys",
+    version="1.2.0",
+    author="Moonsys",
     author_email="admin@moonsys.co",
     description="A comprehensive server monitoring tool that collects and sends system metrics to a Socket.IO server",
     long_description=read_readme(),

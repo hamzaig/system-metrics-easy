@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "system-metrics-easy"
-version = "1.1.2"
+version = "1.2.0"
 authors = [
-    {name = "moonsys", email = "admin@moonsys.co"},
+    {name = "Moonsys", email = "admin@moonsys.co"},
 ]
 description = "A comprehensive server monitoring tool that collects and sends system metrics to a Socket.IO server"
 readme = "README.md"
