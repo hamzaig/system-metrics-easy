@@ -1,18 +1,8 @@
 #!/usr/bin/env python3
-"""
-Enhanced Universal Server Health & Metrics Script
-Supports NVIDIA, Apple Silicon, AMD, and Intel GPUs
-Portable script that works on any Linux/macOS server with Python
-
-Usage:
-    python3 server_metrics.py                    # Emit to Socket.IO server
-    python3 server_metrics.py --interval 5       # Custom interval
-    python3 server_metrics.py --server-id abc123 # Custom server ID
-    python3 server_metrics.py --url http://myserver:8000 # Custom server URL
-"""
 
 import json
 import os
+import re
 import subprocess
 import time
 import platform
@@ -27,10 +17,11 @@ from pathlib import Path
 
 load_dotenv()
 
-# Version information
-__version__ = "1.2.0"
+
+__version__ = "1.3.0"
 
 TIME_INTERVAL = int(os.getenv("TIME_INTERVAL") or "10")
+# SOCKET_SERVER_URL = "http://localhost:8000"
 SOCKET_SERVER_URL = "https://api.server-metrics.letz.chat"  # Hardcoded backend URL
 SERVER_ID = os.getenv("SERVER_ID") or f"server-{platform.node()}"
 
@@ -974,31 +965,340 @@ class ServerMetrics:
             return None
 
     def _get_amd_gpu_stats(self) -> Optional[List[Dict[str, Any]]]:
-        """Get AMD GPU statistics using rocm-smi or other tools with robust error handling"""
+        """Get AMD GPU statistics using rocm-smi or amd-smi with robust error handling"""
+        # Try amd-smi first (newer AMD tool), then fallback to rocm-smi
+        for tool_name in ["amd-smi", "rocm-smi"]:
+            try:
+                # Try with JSON output for easier parsing
+                with self.safe_subprocess(
+                    [
+                        tool_name,
+                        "--showid",
+                        "--showmeminfo",
+                        "vram",
+                        "--showuse",
+                        "--showtemp",
+                        "--json",
+                    ],
+                    timeout=self.timeout_seconds,
+                ) as process:
+                    stdout, stderr = process.communicate(timeout=self.timeout_seconds)
+                    if process.returncode != 0 or not stdout.strip():
+                        continue  # Try next tool
+
+                    try:
+                        data = json.loads(stdout)
+                        gpu_data = []
+
+                        # Parse JSON output - handle different possible structures
+                        # rocm-smi/amd-smi JSON can have different formats
+                        if isinstance(data, dict):
+                            # Try different possible key structures
+                            gpu_dict = data
+                            # Some versions use numeric keys, others use string keys
+                            if not any(
+                                isinstance(k, (int, str)) and "gpu" in str(k).lower()
+                                for k in data.keys()
+                            ):
+                                # Might be nested structure
+                                for key in data.keys():
+                                    if isinstance(data[key], dict):
+                                        gpu_dict = {key: data[key]}
+                                        break
+
+                            # Parse each GPU
+                            for gpu_id, gpu_info in gpu_dict.items():
+                                if not isinstance(gpu_info, dict):
+                                    continue
+
+                                try:
+                                    # Extract GPU name/ID - try multiple possible keys
+                                    name = (
+                                        gpu_info.get("Card series")
+                                        or gpu_info.get("Card Series")
+                                        or gpu_info.get("card_series")
+                                        or gpu_info.get("name")
+                                        or f"AMD GPU {gpu_id}"
+                                    )
+
+                                    # Extract utilization - try multiple possible keys
+                                    utilization = 0
+                                    for key in [
+                                        "GPU use (%)",
+                                        "GPU Use (%)",
+                                        "gpu_use_percent",
+                                        "utilization",
+                                    ]:
+                                        val = gpu_info.get(key)
+                                        if val is not None:
+                                            utilization = self._safe_int(val, 0)
+                                            break
+                                    utilization = min(max(utilization, 0), 100)
+
+                                    # Extract memory info - try multiple possible keys and formats
+                                    memory_total_bytes = 0
+                                    memory_used_bytes = 0
+
+                                    # Try different key names for total memory
+                                    for key in [
+                                        "VRAM Total Memory (B)",
+                                        "vram_total_memory_b",
+                                        "memory_total_bytes",
+                                    ]:
+                                        val = gpu_info.get(key)
+                                        if val is not None:
+                                            if isinstance(val, dict):
+                                                memory_total_bytes = self._safe_int(
+                                                    val, 0
+                                                )
+                                            else:
+                                                memory_total_bytes = self._safe_int(
+                                                    val, 0
+                                                )
+                                            break
+
+                                    # Try different key names for used memory
+                                    for key in [
+                                        "VRAM Total Used Memory (B)",
+                                        "vram_total_used_memory_b",
+                                        "memory_used_bytes",
+                                    ]:
+                                        val = gpu_info.get(key)
+                                        if val is not None:
+                                            if isinstance(val, dict):
+                                                memory_used_bytes = self._safe_int(
+                                                    val, 0
+                                                )
+                                            else:
+                                                memory_used_bytes = self._safe_int(
+                                                    val, 0
+                                                )
+                                            break
+
+                                    memory_total_mb = memory_total_bytes // (
+                                        1024 * 1024
+                                    )
+                                    memory_used_mb = memory_used_bytes // (1024 * 1024)
+
+                                    # Extract temperature - try multiple possible keys
+                                    temp = 0
+                                    for key in [
+                                        "Temperature (Sensor edge) (C)",
+                                        "temperature_c",
+                                        "temp",
+                                    ]:
+                                        val = gpu_info.get(key)
+                                        if val is not None:
+                                            temp = self._safe_int(val, 0)
+                                            break
+                                    temp = min(max(temp, 0), 200)
+
+                                    # Calculate derived values
+                                    memory_used_gb = (
+                                        round(memory_used_mb / 1024, 2)
+                                        if memory_used_mb > 0
+                                        else 0
+                                    )
+                                    memory_total_gb = (
+                                        round(memory_total_mb / 1024, 2)
+                                        if memory_total_mb > 0
+                                        else 0
+                                    )
+
+                                    memory_usage_percent = 0.0
+                                    if memory_total_mb > 0:
+                                        memory_usage_percent = min(
+                                            (memory_used_mb / memory_total_mb) * 100,
+                                            100.0,
+                                        )
+
+                                    gpu_data.append(
+                                        {
+                                            "gpu_id": str(gpu_id),
+                                            "name": name,
+                                            "type": "AMD",
+                                            "utilization_percent": utilization,
+                                            "memory_used_mb": memory_used_mb,
+                                            "memory_total_mb": memory_total_mb,
+                                            "temperature_c": temp,
+                                            "memory_used_gb": memory_used_gb,
+                                            "memory_total_gb": memory_total_gb,
+                                            "memory_usage_percent": round(
+                                                memory_usage_percent, 2
+                                            ),
+                                        }
+                                    )
+                                except Exception as e:
+                                    print(
+                                        f"Warning: Error parsing AMD GPU {gpu_id}: {e}"
+                                    )
+                                    continue
+
+                        if gpu_data:
+                            return gpu_data
+
+                    except json.JSONDecodeError:
+                        continue  # Try next tool or fallback
+
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                continue  # Try next tool
+            except Exception as e:
+                print(f"Debug: {tool_name} detection failed: {e}")
+                continue  # Try next tool
+
+        # Fallback to text parsing if JSON failed
+        return self._get_amd_gpu_stats_fallback()
+
+    def _get_amd_gpu_stats_fallback(self) -> Optional[List[Dict[str, Any]]]:
+        """Fallback method for AMD GPU detection using text parsing"""
         try:
-            # Try rocm-smi first (for AMD GPUs)
             with self.safe_subprocess(
-                ["rocm-smi", "--showmeminfo", "vram", "--showtemp", "--showuse"],
+                ["rocm-smi"],
                 timeout=self.timeout_seconds,
             ) as process:
                 stdout, stderr = process.communicate(timeout=self.timeout_seconds)
+                if process.returncode != 0 or not stdout.strip():
+                    return None
+                gpu_data = []
+                lines = stdout.strip().split("\n")
 
+                # Look for GPU lines in rocm-smi output
+                for line in lines:
+                    if "GPU" in line and any(x in line for x in ["card", "device"]):
+                        # Basic detection - extract what we can
+                        gpu_match = re.search(r"GPU\[?(\d+)\]?", line, re.IGNORECASE)
+                        gpu_id = gpu_match.group(1) if gpu_match else "0"
+
+                        gpu_data.append(
+                            {
+                                "gpu_id": gpu_id,
+                                "name": f"AMD GPU {gpu_id}",
+                                "type": "AMD",
+                                "utilization_percent": "N/A",
+                                "memory_used_mb": "N/A",
+                                "memory_total_mb": "N/A",
+                                "temperature_c": "N/A",
+                                "memory_used_gb": "N/A",
+                                "memory_total_gb": "N/A",
+                                "memory_usage_percent": "N/A",
+                                "note": "AMD GPU detected - limited metrics available",
+                            }
+                        )
+
+                return gpu_data if gpu_data else None
+        except Exception as e:
+            print(f"Debug: AMD fallback detection failed: {e}")
+            return None
+
+    def _get_intel_gpu_stats(self) -> Optional[List[Dict[str, Any]]]:
+        """Get Intel GPU statistics with robust error handling"""
+        gpu_data = []
+
+        # Method 1: Try intel_gpu_top with JSON output (newer versions)
+        try:
+            with self.safe_subprocess(
+                ["intel_gpu_top", "-J", "-s", "100"],  # JSON output, 100ms sample
+                timeout=self.timeout_seconds,
+            ) as process:
+                stdout, stderr = process.communicate(timeout=self.timeout_seconds)
                 if process.returncode == 0 and stdout.strip():
-                    # Parse rocm-smi output (simplified)
-                    lines = stdout.strip().split("\n")
-                    gpu_data = []
+                    try:
+                        data = json.loads(stdout)
 
-                    for i, line in enumerate(lines):
-                        if not line.strip():
-                            continue
+                        # Extract GPU info from JSON
+                        engines = data.get("engines", {})
 
+                        # Calculate average utilization
+                        total_busy = sum(
+                            engine.get("busy", 0) for engine in engines.values()
+                        )
+                        num_engines = len(engines)
+                        avg_utilization = (
+                            int((total_busy / num_engines)) if num_engines > 0 else 0
+                        )
+
+                        gpu_data.append(
+                            {
+                                "gpu_id": "0",
+                                "name": "Intel GPU",
+                                "type": "Intel",
+                                "utilization_percent": min(avg_utilization, 100),
+                                "memory_used_mb": "N/A",
+                                "memory_total_mb": "N/A",
+                                "temperature_c": "N/A",
+                                "memory_used_gb": "N/A",
+                                "memory_total_gb": "N/A",
+                                "memory_usage_percent": "N/A",
+                            }
+                        )
+                        return gpu_data
+                    except json.JSONDecodeError:
+                        pass
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+
+        # Method 2: Try sysfs (Linux)
+        try:
+            import os
+            import glob
+
+            drm_cards = glob.glob("/sys/class/drm/card*/device/vendor")
+            for vendor_path in drm_cards:
+                try:
+                    with open(vendor_path, "r") as f:
+                        vendor_id = f.read().strip()
+
+                    # Intel vendor ID is 0x8086
+                    if vendor_id == "0x8086":
+                        card_path = os.path.dirname(vendor_path)
+
+                        # Try to get device name
+                        device_name = "Intel GPU"
                         try:
-                            if "GPU" in line and "Memory" in line:
+                            with open(os.path.join(card_path, "device"), "r") as f:
+                                device_id = f.read().strip()
+                                device_name = f"Intel GPU ({device_id})"
+                        except Exception:
+                            pass
+
+                        gpu_data.append(
+                            {
+                                "gpu_id": "0",
+                                "name": device_name,
+                                "type": "Intel",
+                                "utilization_percent": "N/A",
+                                "memory_used_mb": "N/A",
+                                "memory_total_mb": "N/A",
+                                "temperature_c": "N/A",
+                                "memory_used_gb": "N/A",
+                                "memory_total_gb": "N/A",
+                                "memory_usage_percent": "N/A",
+                                "note": "Intel GPU detected via sysfs",
+                            }
+                        )
+                        return gpu_data
+                except Exception:
+                    continue
+
+        except Exception as e:
+            print(f"Debug: Intel sysfs detection failed: {e}")
+
+        # Method 3: Try lspci as last resort
+        try:
+            with self.safe_subprocess(
+                ["lspci", "-nn"],
+                timeout=self.timeout_seconds,
+            ) as process:
+                stdout, stderr = process.communicate(timeout=self.timeout_seconds)
+                if process.returncode == 0 and stdout.strip():
+                    for line in stdout.strip().split("\n"):
+                        if "VGA" in line or "3D" in line or "Display" in line:
+                            if "Intel" in line:
                                 gpu_data.append(
                                     {
-                                        "gpu_id": str(i),
-                                        "name": f"AMD GPU {i}",
-                                        "type": "AMD",
+                                        "gpu_id": "0",
+                                        "name": "Intel GPU (detected via lspci)",
+                                        "type": "Intel",
                                         "utilization_percent": "N/A",
                                         "memory_used_mb": "N/A",
                                         "memory_total_mb": "N/A",
@@ -1006,64 +1306,15 @@ class ServerMetrics:
                                         "memory_used_gb": "N/A",
                                         "memory_total_gb": "N/A",
                                         "memory_usage_percent": "N/A",
-                                        "note": "AMD GPU detected via rocm-smi - detailed parsing needed",
+                                        "note": "Intel GPU detected - install intel_gpu_top for detailed metrics",
                                     }
                                 )
-                        except Exception as e:
-                            print(f"Debug: Error parsing AMD GPU line {i + 1}: {e}")
-                            continue
+                                return gpu_data
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
 
-                    return gpu_data if gpu_data else None
-                else:
-                    print(f"Debug: rocm-smi failed: {stderr}")
-                    return None
-
-        except subprocess.TimeoutExpired:
-            print("Warning: rocm-smi command timed out")
-            return None
-        except FileNotFoundError:
-            print("Debug: rocm-smi command not found")
-            return None
-        except Exception as e:
-            print(f"Debug: AMD GPU detection failed: {e}")
-            return None
-
-    def _get_intel_gpu_stats(self) -> Optional[List[Dict[str, Any]]]:
-        """Get Intel GPU statistics with robust error handling"""
-        try:
-            # Try intel_gpu_top or other Intel tools
-            with self.safe_subprocess(["intel_gpu_top", "-l"], timeout=5) as process:
-                stdout, stderr = process.communicate(timeout=5)
-
-                if process.returncode == 0 and stdout.strip():
-                    return [
-                        {
-                            "gpu_id": "0",
-                            "name": "Intel GPU",
-                            "type": "Intel",
-                            "utilization_percent": "N/A",
-                            "memory_used_mb": "N/A",
-                            "memory_total_mb": "N/A",
-                            "temperature_c": "N/A",
-                            "memory_used_gb": "N/A",
-                            "memory_total_gb": "N/A",
-                            "memory_usage_percent": "N/A",
-                            "note": "Intel GPU detected - detailed metrics parsing needed",
-                        }
-                    ]
-                else:
-                    print(f"Debug: intel_gpu_top failed: {stderr}")
-                    return None
-
-        except subprocess.TimeoutExpired:
-            print("Warning: intel_gpu_top command timed out")
-            return None
-        except FileNotFoundError:
-            print("Debug: intel_gpu_top command not found")
-            return None
-        except Exception as e:
-            print(f"Debug: Intel GPU detection failed: {e}")
-            return None
+        print("Debug: Intel GPU not detected")
+        return None
 
     def get_cuda_processes(self) -> Dict[str, Any]:
         """Get CUDA process information with robust error handling"""
@@ -1337,6 +1588,8 @@ def get_user_config():
 
     # Server URL is hardcoded
     server_url = "https://api.server-metrics.letz.chat"
+    # server_url = "http://localhost:8000"
+
     print(f"\n2. Backend server: {server_url} (hardcoded)")
 
     # Get server ID

@@ -3,9 +3,9 @@ Server Metrics Monitor
 A comprehensive server monitoring tool that collects and sends system metrics to a Socket.IO server.
 """
 
-__version__ = "1.0.0"
-__author__ = "Your Name"
-__email__ = "your.email@example.com"
+__version__ = "1.3.0"
+__author__ = "Moonsys"
+__email__ = "admin@moonsys.co"
 
 from .server_metrics import ServerMetrics, main
 
