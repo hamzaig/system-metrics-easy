@@ -119,7 +119,7 @@ The monitor emits comprehensive metrics data in real-time with the following str
     "os": "Linux 5.4.0",
     "architecture": "x86_64",
     "python_version": "3.9.7",
-    "monitor_version": "1.2.0",
+    "monitor_version": "1.3.0",
     "uptime_seconds": 86400.5,
     "boot_time": "2022-01-01 00:00:00"
   },
@@ -203,9 +203,9 @@ The monitor emits comprehensive metrics data in real-time with the following str
 ### Optional GPU Support
 
 - **NVIDIA**: nvidia-smi (included with NVIDIA drivers)
-- **AMD**: ROCm tools (rocm-smi)
+- **AMD**: ROCm tools (rocm-smi or amd-smi) with comprehensive metrics
 - **Apple Silicon**: Native macOS support
-- **Intel**: Basic detection support
+- **Intel**: Multi-method detection (intel_gpu_top, sysfs, lspci)
 
 ## 🔄 Background Service Management
 
@@ -379,7 +379,16 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📝 Changelog
 
-### Version 1.2.0 (Latest)
+### Version 1.3.0 (Latest)
+
+- **NEW**: Enhanced AMD GPU support with rocm-smi and amd-smi compatibility
+- **NEW**: Comprehensive Intel GPU detection (intel_gpu_top, sysfs, lspci)
+- **IMPROVED**: Flexible JSON parsing for different GPU tool versions
+- **IMPROVED**: Better fallback mechanisms for GPU detection
+- **FIXED**: Improved error handling for missing GPU tools
+- **ADDED**: Support for multiple AMD GPU detection methods
+
+### Version 1.2.0
 
 - **NEW**: Hardcoded backend URL for simplified deployment
 - **FIXED**: CPU monitoring accuracy improvements
