@@ -10,6 +10,8 @@ import signal
 import sys
 import argparse
 import socketio
+import io
+import csv
 from contextlib import contextmanager
 from typing import Dict, List, Optional, Union, Any
 from dotenv import load_dotenv
@@ -18,7 +20,7 @@ from pathlib import Path
 load_dotenv()
 
 
-__version__ = "1.3.0"
+__version__ = "1.3.1"
 
 TIME_INTERVAL = int(os.getenv("TIME_INTERVAL") or "10")
 # SOCKET_SERVER_URL = "http://localhost:8000"
@@ -58,6 +60,10 @@ class ServerMetrics:
                 preexec_fn=None if os.name == "nt" else os.setsid,
             )
             yield process
+        except FileNotFoundError:
+            # FileNotFoundError is expected when tools don't exist
+            # Let the caller handle it with appropriate messages
+            raise
         except Exception as e:
             print(f"Subprocess error: {e}")
             raise
@@ -735,6 +741,191 @@ class ServerMetrics:
 
     def _get_nvidia_gpu_stats(self) -> Optional[List[Dict[str, Any]]]:
         """Get NVIDIA GPU statistics using nvidia-smi with robust error handling"""
+        # Try JSON format first (most reliable, handles all GPU names including H200)
+        try:
+            with self.safe_subprocess(
+                [
+                    "nvidia-smi",
+                    "--query-gpu=index,name,utilization.gpu,memory.used,memory.total,temperature.gpu",
+                    "--format=json",
+                ],
+                timeout=self.timeout_seconds,
+            ) as process:
+                stdout, stderr = process.communicate(timeout=self.timeout_seconds)
+
+                if process.returncode == 0 and stdout.strip():
+                    try:
+                        data = json.loads(stdout)
+                        # nvidia-smi JSON format: array of GPU objects with flat keys
+                        # Handle both array format and object with "gpu" key (for compatibility)
+                        if isinstance(data, list):
+                            gpu_list = data
+                        elif isinstance(data, dict) and "gpu" in data:
+                            gpu_list = data.get("gpu", [])
+                        else:
+                            # Try to find GPU array in nested structure
+                            gpu_list = data.get("gpu", [])
+
+                        if gpu_list:
+                            gpu_data = []
+                            for gpu in gpu_list:
+                                try:
+                                    # nvidia-smi JSON uses flat keys: "index", "name", "utilization.gpu", etc.
+                                    gpu_id = str(gpu.get("index", gpu.get("id", "0")))
+                                    name = str(
+                                        gpu.get("name", "Unknown NVIDIA GPU")
+                                    ).strip()
+
+                                    # Parse utilization - nvidia-smi JSON uses "utilization.gpu" as flat key
+                                    utilization_str = (
+                                        str(
+                                            gpu.get(
+                                                "utilization.gpu",
+                                                gpu.get("utilization", {}).get(
+                                                    "gpu_util", "0"
+                                                ),
+                                            )
+                                        )
+                                        .replace("%", "")
+                                        .replace(" ", "")
+                                        .strip()
+                                    )
+                                    utilization = self._safe_int(utilization_str, 0)
+                                    utilization = self._validate_positive_number(
+                                        utilization, f"GPU {gpu_id} utilization"
+                                    )
+                                    utilization = min(utilization, 100)
+
+                                    # Parse memory used - nvidia-smi JSON uses "memory.used" as flat key
+                                    memory_used_str = (
+                                        str(
+                                            gpu.get(
+                                                "memory.used",
+                                                gpu.get("fb_memory_usage", {}).get(
+                                                    "used", "0"
+                                                ),
+                                            )
+                                        )
+                                        .replace("MiB", "")
+                                        .replace("MB", "")
+                                        .replace(" ", "")
+                                        .strip()
+                                    )
+                                    memory_used_mb = self._safe_int(memory_used_str, 0)
+                                    memory_used_mb = self._validate_positive_number(
+                                        memory_used_mb, f"GPU {gpu_id} memory used"
+                                    )
+
+                                    # Parse memory total - nvidia-smi JSON uses "memory.total" as flat key
+                                    memory_total_str = (
+                                        str(
+                                            gpu.get(
+                                                "memory.total",
+                                                gpu.get("fb_memory_usage", {}).get(
+                                                    "total", "0"
+                                                ),
+                                            )
+                                        )
+                                        .replace("MiB", "")
+                                        .replace("MB", "")
+                                        .replace(" ", "")
+                                        .strip()
+                                    )
+                                    memory_total_mb = self._safe_int(
+                                        memory_total_str, 0
+                                    )
+                                    memory_total_mb = self._validate_positive_number(
+                                        memory_total_mb, f"GPU {gpu_id} memory total"
+                                    )
+
+                                    # Parse temperature - nvidia-smi JSON uses "temperature.gpu" as flat key
+                                    temp_str = (
+                                        str(
+                                            gpu.get(
+                                                "temperature.gpu",
+                                                gpu.get("temperature", {}).get(
+                                                    "gpu_temp", "0"
+                                                ),
+                                            )
+                                        )
+                                        .replace("C", "")
+                                        .replace("°", "")
+                                        .replace(" ", "")
+                                        .strip()
+                                    )
+                                    temperature = self._safe_int(temp_str, 0)
+                                    temperature = self._validate_positive_number(
+                                        temperature, f"GPU {gpu_id} temperature"
+                                    )
+                                    temperature = min(temperature, 200)
+
+                                    # Calculate derived values
+                                    memory_used_gb = (
+                                        round(memory_used_mb / 1024, 2)
+                                        if memory_used_mb > 0
+                                        else 0
+                                    )
+                                    memory_total_gb = (
+                                        round(memory_total_mb / 1024, 2)
+                                        if memory_total_mb > 0
+                                        else 0
+                                    )
+
+                                    # Calculate memory usage percentage
+                                    memory_usage_percent = 0.0
+                                    if memory_total_mb > 0 and memory_used_mb >= 0:
+                                        memory_usage_percent = (
+                                            memory_used_mb / memory_total_mb
+                                        ) * 100
+                                        memory_usage_percent = min(
+                                            memory_usage_percent, 100.0
+                                        )
+
+                                    # Ensure used doesn't exceed total
+                                    if (
+                                        memory_used_mb > memory_total_mb
+                                        and memory_total_mb > 0
+                                    ):
+                                        print(
+                                            f"Warning: GPU {gpu_id} memory used ({memory_used_mb} MB) exceeds total ({memory_total_mb} MB)"
+                                        )
+                                        memory_used_mb = memory_total_mb
+                                        memory_used_gb = memory_total_gb
+                                        memory_usage_percent = 100.0
+
+                                    gpu_data.append(
+                                        {
+                                            "gpu_id": gpu_id,
+                                            "name": name,
+                                            "type": "NVIDIA",
+                                            "utilization_percent": utilization,
+                                            "memory_used_mb": memory_used_mb,
+                                            "memory_total_mb": memory_total_mb,
+                                            "temperature_c": temperature,
+                                            "memory_used_gb": memory_used_gb,
+                                            "memory_total_gb": memory_total_gb,
+                                            "memory_usage_percent": round(
+                                                memory_usage_percent, 2
+                                            ),
+                                        }
+                                    )
+                                except Exception as e:
+                                    print(
+                                        f"Warning: Error parsing NVIDIA GPU JSON entry: {e}"
+                                    )
+                                    continue
+
+                            if gpu_data:
+                                return gpu_data
+                    except json.JSONDecodeError as e:
+                        print(f"Debug: Failed to parse nvidia-smi JSON: {e}")
+                        pass  # Fall through to CSV parsing
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass  # Fall through to CSV parsing
+        except Exception as e:
+            print(f"Debug: nvidia-smi JSON format failed: {e}")
+
+        # Fallback to CSV format with proper CSV parsing (handles commas in GPU names)
         try:
             with self.safe_subprocess(
                 [
@@ -757,23 +948,21 @@ class ServerMetrics:
                     return None
 
             gpu_data = []
-            lines = stdout.strip().split("\n")
+            # Use Python's csv module for proper parsing (handles quoted fields with commas)
+            csv_reader = csv.reader(io.StringIO(stdout.strip()))
 
-            for line_num, line in enumerate(lines):
-                if not line.strip():
+            for line_num, parts in enumerate(csv_reader, start=1):
+                if not parts or len(parts) < 6:
+                    if parts:  # Only warn if there's actual content
+                        print(
+                            f"Warning: Invalid nvidia-smi output line {line_num}: {','.join(parts)}"
+                        )
                     continue
 
                 try:
-                    parts = [part.strip() for part in line.split(",")]
-                    if len(parts) < 6:
-                        print(
-                            f"Warning: Invalid nvidia-smi output line {line_num + 1}: {line}"
-                        )
-                        continue
-
                     # Parse and validate each field
-                    gpu_id = str(parts[0]) if parts[0] else "0"
-                    name = str(parts[1]) if parts[1] else "Unknown NVIDIA GPU"
+                    gpu_id = str(parts[0]).strip() if parts[0] else "0"
+                    name = str(parts[1]).strip() if parts[1] else "Unknown NVIDIA GPU"
 
                     # Parse utilization
                     utilization = self._safe_int(parts[2], 0)
@@ -842,7 +1031,7 @@ class ServerMetrics:
                     )
 
                 except Exception as e:
-                    print(f"Warning: Error parsing nvidia-smi line {line_num + 1}: {e}")
+                    print(f"Warning: Error parsing nvidia-smi line {line_num}: {e}")
                     continue
 
             return gpu_data if gpu_data else None
@@ -1194,6 +1383,222 @@ class ServerMetrics:
         """Get Intel GPU statistics with robust error handling"""
         gpu_data = []
 
+        # Windows-specific detection methods
+        if platform.system() == "Windows":
+            # Method 1: Try WMI via wmic (Windows)
+            try:
+                with self.safe_subprocess(
+                    [
+                        "wmic",
+                        "path",
+                        "win32_VideoController",
+                        "get",
+                        "name,AdapterRAM",
+                        "/format:list",
+                    ],
+                    timeout=self.timeout_seconds,
+                ) as process:
+                    stdout, stderr = process.communicate(timeout=self.timeout_seconds)
+                    if process.returncode == 0 and stdout.strip():
+                        lines = stdout.strip().split("\n")
+                        current_gpu = {}
+                        for line in lines:
+                            line = line.strip()
+
+                            # Check if this is a new GPU entry (empty line or new Name=)
+                            if line == "":
+                                # Process current GPU if it's Intel
+                                if current_gpu.get("name") and (
+                                    "Intel" in current_gpu["name"]
+                                    or "Iris" in current_gpu["name"]
+                                ):
+                                    gpu_name = current_gpu["name"]
+                                    memory_total_mb = current_gpu.get(
+                                        "memory_total_mb", 0
+                                    )
+                                    memory_total_gb = (
+                                        round(memory_total_mb / 1024, 2)
+                                        if memory_total_mb > 0
+                                        else "N/A"
+                                    )
+
+                                    gpu_data.append(
+                                        {
+                                            "gpu_id": "0",
+                                            "name": gpu_name,
+                                            "type": "Intel",
+                                            "utilization_percent": "N/A",
+                                            "memory_used_mb": "N/A",
+                                            "memory_total_mb": memory_total_mb
+                                            if memory_total_mb > 0
+                                            else "N/A",
+                                            "temperature_c": "N/A",
+                                            "memory_used_gb": "N/A",
+                                            "memory_total_gb": memory_total_gb,
+                                            "memory_usage_percent": "N/A",
+                                            "note": "Intel GPU detected via WMI (Windows)",
+                                        }
+                                    )
+                                current_gpu = {}  # Reset for next GPU
+                                continue
+
+                            if line.startswith("Name="):
+                                # If we already have a GPU, process it first
+                                if current_gpu.get("name") and (
+                                    "Intel" in current_gpu["name"]
+                                    or "Iris" in current_gpu["name"]
+                                ):
+                                    gpu_name = current_gpu["name"]
+                                    memory_total_mb = current_gpu.get(
+                                        "memory_total_mb", 0
+                                    )
+                                    memory_total_gb = (
+                                        round(memory_total_mb / 1024, 2)
+                                        if memory_total_mb > 0
+                                        else "N/A"
+                                    )
+
+                                    gpu_data.append(
+                                        {
+                                            "gpu_id": "0",
+                                            "name": gpu_name,
+                                            "type": "Intel",
+                                            "utilization_percent": "N/A",
+                                            "memory_used_mb": "N/A",
+                                            "memory_total_mb": memory_total_mb
+                                            if memory_total_mb > 0
+                                            else "N/A",
+                                            "temperature_c": "N/A",
+                                            "memory_used_gb": "N/A",
+                                            "memory_total_gb": memory_total_gb,
+                                            "memory_usage_percent": "N/A",
+                                            "note": "Intel GPU detected via WMI (Windows)",
+                                        }
+                                    )
+                                current_gpu = {"name": line.split("=", 1)[1].strip()}
+                            elif line.startswith("AdapterRAM="):
+                                ram_bytes = line.split("=", 1)[1].strip()
+                                if ram_bytes and ram_bytes != "":
+                                    try:
+                                        ram_mb = int(ram_bytes) // (1024 * 1024)
+                                        current_gpu["memory_total_mb"] = ram_mb
+                                    except (ValueError, TypeError):
+                                        pass
+
+                        # Process last GPU if it's Intel
+                        if current_gpu.get("name") and (
+                            "Intel" in current_gpu["name"]
+                            or "Iris" in current_gpu["name"]
+                        ):
+                            gpu_name = current_gpu["name"]
+                            memory_total_mb = current_gpu.get("memory_total_mb", 0)
+                            memory_total_gb = (
+                                round(memory_total_mb / 1024, 2)
+                                if memory_total_mb > 0
+                                else "N/A"
+                            )
+
+                            gpu_data.append(
+                                {
+                                    "gpu_id": "0",
+                                    "name": gpu_name,
+                                    "type": "Intel",
+                                    "utilization_percent": "N/A",
+                                    "memory_used_mb": "N/A",
+                                    "memory_total_mb": memory_total_mb
+                                    if memory_total_mb > 0
+                                    else "N/A",
+                                    "temperature_c": "N/A",
+                                    "memory_used_gb": "N/A",
+                                    "memory_total_gb": memory_total_gb,
+                                    "memory_usage_percent": "N/A",
+                                    "note": "Intel GPU detected via WMI (Windows)",
+                                }
+                            )
+
+                        if gpu_data:
+                            return gpu_data
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                pass
+            except Exception as e:
+                print(f"Debug: Intel WMI detection failed: {e}")
+
+            # Method 2: Try PowerShell (Windows)
+            try:
+                ps_command = (
+                    "Get-WmiObject Win32_VideoController | "
+                    "Where-Object { $_.Name -like '*Intel*' -or $_.Name -like '*Iris*' } | "
+                    "Select-Object Name, AdapterRAM | "
+                    "ConvertTo-Json"
+                )
+                with self.safe_subprocess(
+                    ["powershell", "-Command", ps_command],
+                    timeout=self.timeout_seconds,
+                ) as process:
+                    stdout, stderr = process.communicate(timeout=self.timeout_seconds)
+                    if process.returncode == 0 and stdout.strip():
+                        try:
+                            data = json.loads(stdout)
+                            # PowerShell might return array or single object
+                            if isinstance(data, list):
+                                gpus = data
+                            else:
+                                gpus = [data]
+
+                            for gpu in gpus:
+                                if not isinstance(gpu, dict):
+                                    continue
+
+                                gpu_name = gpu.get("Name", "Intel GPU")
+                                if "Intel" in gpu_name or "Iris" in gpu_name:
+                                    adapter_ram = gpu.get("AdapterRAM")
+                                    memory_total_mb = 0
+                                    if adapter_ram:
+                                        try:
+                                            memory_total_mb = int(adapter_ram) // (
+                                                1024 * 1024
+                                            )
+                                        except (ValueError, TypeError):
+                                            pass
+
+                                    memory_total_gb = (
+                                        round(memory_total_mb / 1024, 2)
+                                        if memory_total_mb > 0
+                                        else "N/A"
+                                    )
+
+                                    gpu_data.append(
+                                        {
+                                            "gpu_id": "0",
+                                            "name": gpu_name,
+                                            "type": "Intel",
+                                            "utilization_percent": "N/A",
+                                            "memory_used_mb": "N/A",
+                                            "memory_total_mb": memory_total_mb
+                                            if memory_total_mb > 0
+                                            else "N/A",
+                                            "temperature_c": "N/A",
+                                            "memory_used_gb": "N/A",
+                                            "memory_total_gb": memory_total_gb,
+                                            "memory_usage_percent": "N/A",
+                                            "note": "Intel GPU detected via PowerShell (Windows)",
+                                        }
+                                    )
+
+                            if gpu_data:
+                                return gpu_data
+                        except json.JSONDecodeError:
+                            pass
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                pass
+            except Exception as e:
+                print(f"Debug: Intel PowerShell detection failed: {e}")
+
+            # If Windows methods failed, return None (don't try Linux methods)
+            print("Debug: Intel GPU not detected on Windows")
+            return None
+
+        # Linux/macOS-specific detection methods
         # Method 1: Try intel_gpu_top with JSON output (newer versions)
         try:
             with self.safe_subprocess(
