@@ -119,7 +119,7 @@ The monitor emits comprehensive metrics data in real-time with the following str
     "os": "Linux 5.4.0",
     "architecture": "x86_64",
     "python_version": "3.9.7",
-    "monitor_version": "1.3.0",
+    "monitor_version": "1.3.1",
     "uptime_seconds": 86400.5,
     "boot_time": "2022-01-01 00:00:00"
   },
@@ -379,7 +379,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📝 Changelog
 
-### Version 1.3.0 (Latest)
+### Version 1.3.1 (Latest)
+
+- **FIXED**: NVIDIA H200 GPU detection issue - improved CSV parsing to handle GPU names with commas
+- **IMPROVED**: Added JSON format support for nvidia-smi (more reliable parsing)
+- **IMPROVED**: Enhanced CSV parsing using Python's csv module (handles quoted fields properly)
+- **FIXED**: Better compatibility with all NVIDIA GPU models including H200
+
+### Version 1.3.0
 
 - **NEW**: Enhanced AMD GPU support with rocm-smi and amd-smi compatibility
 - **NEW**: Comprehensive Intel GPU detection (intel_gpu_top, sysfs, lspci)
